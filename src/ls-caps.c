@@ -1,7 +1,7 @@
 /*
  *	The PCI Utilities -- Show Capabilities
  *
- *	Copyright (c) 1997--2008 Martin Mares <mj@ucw.cz>
+ *	Copyright (c) 1997--2010 Martin Mares <mj@ucw.cz>
  *
  *	Can be freely distributed and used under the terms of the GNU GPL.
  */
@@ -674,7 +674,7 @@ static void cap_express_dev(struct device *d, int where, int type)
 	FLAG(t, PCI_EXP_DEVCAP_RBE),
 	FLAG(t, PCI_EXP_DEVCAP_FLRESET));
   if (type == PCI_EXP_TYPE_UPSTREAM)
-    printf("SlotPowerLimit %fW",
+    printf("SlotPowerLimit %.3fW",
 	power_limit((t & PCI_EXP_DEVCAP_PWR_VAL) >> 18,
 		    (t & PCI_EXP_DEVCAP_PWR_SCL) >> 26));
   printf("\n");
@@ -717,6 +717,8 @@ static char *link_speed(int speed)
 	return "2.5GT/s";
       case 2:
 	return "5GT/s";
+      case 3:
+	return "8GT/s";
       default:
 	return "unknown";
     }
@@ -728,6 +730,8 @@ static char *aspm_support(int code)
     {
       case 1:
 	return "L0s";
+      case 2:
+	return "L1";
       case 3:
 	return "L0s L1";
       default:
@@ -798,7 +802,7 @@ static void cap_express_slot(struct device *d, int where)
   u16 w;
 
   t = get_conf_long(d, where + PCI_EXP_SLTCAP);
-  printf("\t\tSltCap:\tAttnBtn%c PwrCtrl%c MRL%c AttnInd%c PwrInd%c HotPlug%c Surpise%c\n",
+  printf("\t\tSltCap:\tAttnBtn%c PwrCtrl%c MRL%c AttnInd%c PwrInd%c HotPlug%c Surprise%c\n",
 	FLAG(t, PCI_EXP_SLTCAP_ATNB),
 	FLAG(t, PCI_EXP_SLTCAP_PWRC),
 	FLAG(t, PCI_EXP_SLTCAP_MRL),
@@ -806,7 +810,7 @@ static void cap_express_slot(struct device *d, int where)
 	FLAG(t, PCI_EXP_SLTCAP_PWRI),
 	FLAG(t, PCI_EXP_SLTCAP_HPC),
 	FLAG(t, PCI_EXP_SLTCAP_HPS));
-  printf("\t\t\tSlot #%3x, PowerLimit %f; Interlock%c NoCompl%c\n",
+  printf("\t\t\tSlot #%d, PowerLimit %.3fW; Interlock%c NoCompl%c\n",
 	t >> 19,
 	power_limit((t & PCI_EXP_SLTCAP_PWR_VAL) >> 7, (t & PCI_EXP_SLTCAP_PWR_SCL) >> 15),
 	FLAG(t, PCI_EXP_SLTCAP_INTERLOCK),
@@ -916,24 +920,60 @@ static const char *cap_express_dev2_timeout_value(int type)
     }
 }
 
+static const char *cap_express_devcap2_obff(int obff)
+{
+  switch (obff)
+    {
+      case 1:
+        return "Via message";
+      case 2:
+        return "Via WAKE#";
+      case 3:
+        return "Via message/WAKE#";
+      default:
+        return "Not Supported";
+    }
+}
+
+static const char *cap_express_devctl2_obff(int obff)
+{
+  switch (obff)
+    {
+      case 0:
+        return "Disabled";
+      case 1:
+        return "Via message A";
+      case 2:
+        return "Via message B";
+      case 3:
+        return "Via WAKE#";
+      default:
+        return "Unknown";
+    }
+}
+
 static void cap_express_dev2(struct device *d, int where, int type)
 {
   u32 l;
   u16 w;
 
   l = get_conf_long(d, where + PCI_EXP_DEVCAP2);
-  printf("\t\tDevCap2: Completion Timeout: %s, TimeoutDis%c",
+  printf("\t\tDevCap2: Completion Timeout: %s, TimeoutDis%c, LTR%c, OBFF %s",
 	cap_express_dev2_timeout_range(PCI_EXP_DEV2_TIMEOUT_RANGE(l)),
-	FLAG(l, PCI_EXP_DEV2_TIMEOUT_DIS));
+	FLAG(l, PCI_EXP_DEV2_TIMEOUT_DIS),
+	FLAG(l, PCI_EXP_DEVCAP2_LTR),
+	cap_express_devcap2_obff(PCI_EXP_DEVCAP2_OBFF(l)));
   if (type == PCI_EXP_TYPE_ROOT_PORT || type == PCI_EXP_TYPE_DOWNSTREAM)
     printf(" ARIFwd%c\n", FLAG(l, PCI_EXP_DEV2_ARI));
   else
     printf("\n");
 
   w = get_conf_word(d, where + PCI_EXP_DEVCTL2);
-  printf("\t\tDevCtl2: Completion Timeout: %s, TimeoutDis%c",
+  printf("\t\tDevCtl2: Completion Timeout: %s, TimeoutDis%c, LTR%c, OBFF %s",
 	cap_express_dev2_timeout_value(PCI_EXP_DEV2_TIMEOUT_VALUE(w)),
-	FLAG(w, PCI_EXP_DEV2_TIMEOUT_DIS));
+	FLAG(w, PCI_EXP_DEV2_TIMEOUT_DIS),
+	FLAG(w, PCI_EXP_DEV2_LTR),
+	cap_express_devctl2_obff(PCI_EXP_DEV2_OBFF(w)));
   if (type == PCI_EXP_TYPE_ROOT_PORT || type == PCI_EXP_TYPE_DOWNSTREAM)
     printf(" ARIFwd%c\n", FLAG(w, PCI_EXP_DEV2_ARI));
   else
@@ -949,6 +989,8 @@ static const char *cap_express_link2_speed(int type)
 	return "2.5GT/s";
       case 2:
 	return "5GT/s";
+      case 3:
+	return "8GT/s";
       default:
 	return "Unknown";
     }
@@ -985,26 +1027,38 @@ static const char *cap_express_link2_transmargin(int type)
     }
 }
 
-static void cap_express_link2(struct device *d, int where, int type UNUSED)
+static void cap_express_link2(struct device *d, int where, int type)
 {
   u16 w;
 
-  w = get_conf_word(d, where + PCI_EXP_LNKCTL2);
-  printf("\t\tLnkCtl2: Target Link Speed: %s, EnterCompliance%c SpeedDis%c, Selectable De-emphasis: %s\n"
-	"\t\t\t Transmit Margin: %s, EnterModifiedCompliance%c ComplianceSOS%c\n"
-	"\t\t\t Compliance De-emphasis: %s\n",
+  if (!((type == PCI_EXP_TYPE_ENDPOINT || type == PCI_EXP_TYPE_LEG_END) &&
+	(d->dev->dev != 0 || d->dev->func != 0))) {
+    w = get_conf_word(d, where + PCI_EXP_LNKCTL2);
+    printf("\t\tLnkCtl2: Target Link Speed: %s, EnterCompliance%c SpeedDis%c",
 	cap_express_link2_speed(PCI_EXP_LNKCTL2_SPEED(w)),
 	FLAG(w, PCI_EXP_LNKCTL2_CMPLNC),
-	FLAG(w, PCI_EXP_LNKCTL2_SPEED_DIS),
-	cap_express_link2_deemphasis(PCI_EXP_LNKCTL2_DEEMPHASIS(w)),
+	FLAG(w, PCI_EXP_LNKCTL2_SPEED_DIS));
+    if (type == PCI_EXP_TYPE_DOWNSTREAM)
+      printf(", Selectable De-emphasis: %s",
+	cap_express_link2_deemphasis(PCI_EXP_LNKCTL2_DEEMPHASIS(w)));
+    printf("\n"
+	"\t\t\t Transmit Margin: %s, EnterModifiedCompliance%c ComplianceSOS%c\n"
+	"\t\t\t Compliance De-emphasis: %s\n",
 	cap_express_link2_transmargin(PCI_EXP_LNKCTL2_MARGIN(w)),
 	FLAG(w, PCI_EXP_LNKCTL2_MOD_CMPLNC),
 	FLAG(w, PCI_EXP_LNKCTL2_CMPLNC_SOS),
 	cap_express_link2_deemphasis(PCI_EXP_LNKCTL2_COM_DEEMPHASIS(w)));
+  }
 
   w = get_conf_word(d, where + PCI_EXP_LNKSTA2);
-  printf("\t\tLnkSta2: Current De-emphasis Level: %s\n",
-	cap_express_link2_deemphasis(PCI_EXP_LINKSTA2_DEEMPHASIS(w)));
+  printf("\t\tLnkSta2: Current De-emphasis Level: %s, EqualizationComplete%c, EqualizationPhase1%c\n"
+	"\t\t\t EqualizationPhase2%c, EqualizationPhase3%c, LinkEqualizationRequest%c\n",
+	cap_express_link2_deemphasis(PCI_EXP_LINKSTA2_DEEMPHASIS(w)),
+	FLAG(w, PCI_EXP_LINKSTA2_EQU_COMP),
+	FLAG(w, PCI_EXP_LINKSTA2_EQU_PHASE1),
+	FLAG(w, PCI_EXP_LINKSTA2_EQU_PHASE2),
+	FLAG(w, PCI_EXP_LINKSTA2_EQU_PHASE3),
+	FLAG(w, PCI_EXP_LINKSTA2_EQU_REQ));
 }
 
 static void cap_express_slot2(struct device *d UNUSED, int where UNUSED)
@@ -1164,6 +1218,29 @@ cap_af(struct device *d, int where)
   printf("\t\tAFStatus: TP%c\n", FLAG(reg, PCI_AF_STATUS_TP));
 }
 
+static void
+cap_sata_hba(struct device *d, int where, int cap)
+{
+  u32 bars;
+  int bar;
+
+  printf("SATA HBA v%d.%d", BITS(cap, 4, 4), BITS(cap, 0, 4));
+  if (verbose < 2 || !config_fetch(d, where + PCI_SATA_HBA_BARS, 4))
+    {
+      printf("\n");
+      return;
+    }
+
+  bars = get_conf_long(d, where + PCI_SATA_HBA_BARS);
+  bar = BITS(bars, 0, 4);
+  if (bar >= 4 && bar <= 9)
+    printf(" BAR%d Offset=%08x\n", bar - 4, BITS(bars, 4, 20));
+  else if (bar == 15)
+    printf(" InCfgSpace\n");
+  else
+    printf(" BAR??%d\n", bar);
+}
+
 void
 show_caps(struct device *d)
 {
@@ -1225,7 +1302,7 @@ show_caps(struct device *d)
 	      cap_ht(d, where, cap);
 	      break;
 	    case PCI_CAP_ID_VNDR:
-	      printf("Vendor Specific Information <?>\n");
+	      printf("Vendor Specific Information: Len=%02x <?>\n", BITS(cap, 0, 8));
 	      break;
 	    case PCI_CAP_ID_DBG:
 	      cap_debug_port(cap);
@@ -1253,7 +1330,7 @@ show_caps(struct device *d)
 	      cap_msix(d, where, cap);
 	      break;
 	    case PCI_CAP_ID_SATA:
-	      printf("SATA HBA <?>\n");
+	      cap_sata_hba(d, where, cap);
 	      break;
 	    case PCI_CAP_ID_AF:
 	      cap_af(d, where);

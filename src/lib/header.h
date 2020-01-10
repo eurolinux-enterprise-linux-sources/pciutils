@@ -1,7 +1,7 @@
 /*
  *	The PCI Library -- PCI Header Structure (based on <linux/pci.h>)
  *
- *	Copyright (c) 1997--2007 Martin Mares <mj@ucw.cz>
+ *	Copyright (c) 1997--2010 Martin Mares <mj@ucw.cz>
  *
  *	Can be freely distributed and used under the terms of the GNU GPL.
  */
@@ -216,12 +216,17 @@
 #define PCI_EXT_CAP_ID_RCILINK	0x06	/* Root Complex Internal Link Declaration */
 #define PCI_EXT_CAP_ID_RCECOLL	0x07	/* Root Complex Event Collector */
 #define PCI_EXT_CAP_ID_MFVC	0x08	/* Multi-Function Virtual Channel */
+#define PCI_EXT_CAP_ID_VC2	0x09	/* Virtual Channel (2nd ID) */
 #define PCI_EXT_CAP_ID_RBCB	0x0a	/* Root Bridge Control Block */
 #define PCI_EXT_CAP_ID_VNDR	0x0b	/* Vendor specific */
 #define PCI_EXT_CAP_ID_ACS	0x0d	/* Access Controls */
 #define PCI_EXT_CAP_ID_ARI	0x0e	/* Alternative Routing-ID Interpretation */
 #define PCI_EXT_CAP_ID_ATS	0x0f	/* Address Translation Service */
 #define PCI_EXT_CAP_ID_SRIOV	0x10	/* Single Root I/O Virtualization */
+#define PCI_EXT_CAP_ID_TPH	0x17	/* Transaction processing hints */
+#define PCI_EXT_CAP_ID_LTR	0x18	/* Latency Tolerance Reporting */
+
+/*** Definitions of capabilities ***/
 
 /* Power Management Registers */
 
@@ -709,6 +714,9 @@
 #define PCI_HT_RM_CNT1		10	/* Retry Count 1 Register */
 #define PCI_HT_RM_SIZEOF	12
 
+/* Vendor-Specific Capability (see PCI_EVNDR_xxx for the PCIe version) */
+#define PCI_VNDR_LENGTH		2	/* Length byte */
+
 /* PCI Express */
 #define PCI_EXP_FLAGS		0x2	/* Capabilities register */
 #define PCI_EXP_FLAGS_VERS	0x000f	/* Capability version */
@@ -837,11 +845,15 @@
 #define  PCI_EXP_RTSTA_PME_STATUS  0x00010000 /* PME Status */
 #define  PCI_EXP_RTSTA_PME_PENDING 0x00020000 /* PME is Pending */
 #define PCI_EXP_DEVCAP2			0x24	/* Device capabilities 2 */
+#define  PCI_EXP_DEVCAP2_LTR		0x0800	/* LTR supported */
+#define  PCI_EXP_DEVCAP2_OBFF(x)	(((x) >> 18) & 3) /* OBFF supported */
 #define PCI_EXP_DEVCTL2			0x28	/* Device Control */
 #define  PCI_EXP_DEV2_TIMEOUT_RANGE(x)	((x) & 0xf) /* Completion Timeout Ranges Supported */
 #define  PCI_EXP_DEV2_TIMEOUT_VALUE(x)	((x) & 0xf) /* Completion Timeout Value */
 #define  PCI_EXP_DEV2_TIMEOUT_DIS	0x0010	/* Completion Timeout Disable Supported */
 #define  PCI_EXP_DEV2_ARI		0x0020	/* ARI Forwarding */
+#define  PCI_EXP_DEV2_LTR		0x0400	/* LTR enabled */
+#define  PCI_EXP_DEV2_OBFF(x)		(((x) >> 13) & 3) /* OBFF enabled */
 #define PCI_EXP_DEVSTA2			0x2a	/* Device Status */
 #define PCI_EXP_LNKCAP2			0x2c	/* Link Capabilities */
 #define PCI_EXP_LNKCTL2			0x30	/* Link Control */
@@ -852,9 +864,14 @@
 #define  PCI_EXP_LNKCTL2_MARGIN(x)	(((x) >> 7) & 7) /* Transmit Margin */
 #define  PCI_EXP_LNKCTL2_MOD_CMPLNC	0x0400	/* Enter Modified Compliance */
 #define  PCI_EXP_LNKCTL2_CMPLNC_SOS	0x0800	/* Compliance SOS */
-#define  PCI_EXP_LNKCTL2_COM_DEEMPHASIS(x) (((x) >> 12) & 1) /* Compliance De-emphasis */
+#define  PCI_EXP_LNKCTL2_COM_DEEMPHASIS(x) (((x) >> 12) & 0xf) /* Compliance De-emphasis */
 #define PCI_EXP_LNKSTA2			0x32	/* Link Status */
 #define  PCI_EXP_LINKSTA2_DEEMPHASIS(x)	((x) & 1)	/* Current De-emphasis Level */
+#define  PCI_EXP_LINKSTA2_EQU_COMP	0x02	/* Equalization Complete */
+#define  PCI_EXP_LINKSTA2_EQU_PHASE1	0x04	/* Equalization Phase 1 Successful */
+#define  PCI_EXP_LINKSTA2_EQU_PHASE2	0x08	/* Equalization Phase 2 Successful */
+#define  PCI_EXP_LINKSTA2_EQU_PHASE3	0x10	/* Equalization Phase 3 Successful */
+#define  PCI_EXP_LINKSTA2_EQU_REQ	0x20	/* Link Equalization Request */
 #define PCI_EXP_SLTCAP2			0x34	/* Slot Capabilities */
 #define PCI_EXP_SLTCTL2			0x38	/* Slot Control */
 #define PCI_EXP_SLTSTA2			0x3a	/* Slot Status */
@@ -879,6 +896,12 @@
 #define  PCI_AF_CTRL_FLR	0x01
 #define PCI_AF_STATUS		5
 #define  PCI_AF_STATUS_TP	0x01
+
+/* SATA Host Bus Adapter */
+#define PCI_SATA_HBA_BARS	4
+#define PCI_SATA_HBA_REG0	8
+
+/*** Definitions of extended capabilities ***/
 
 /* Advanced Error Reporting */
 #define PCI_ERR_UNCOR_STATUS	4	/* Uncorrectable Error Status */
@@ -940,6 +963,17 @@
 #define  PCI_PWR_DATA_RAIL(x)	(((x) >> 18) & 7)   /* Power Rail */
 #define PCI_PWR_CAP		12	/* Capability */
 #define  PCI_PWR_CAP_BUDGET(x)	((x) & 1)	/* Included in system budget */
+
+/* Root Complex Link */
+#define PCI_RCLINK_ESD		4	/* Element Self Description */
+#define PCI_RCLINK_LINK1	16	/* First Link Entry */
+#define  PCI_RCLINK_LINK_DESC	0	/* Link Entry: Description */
+#define  PCI_RCLINK_LINK_ADDR	8	/* Link Entry: Address (64-bit) */
+#define  PCI_RCLINK_LINK_SIZE	16	/* Link Entry: sizeof */
+
+/* PCIe Vendor-Specific Capability */
+#define PCI_EVNDR_HEADER	4	/* Vendor-Specific Header */
+#define PCI_EVNDR_REGISTERS	8	/* Vendor-Specific Registers */
 
 /* Access Control Services */
 #define PCI_ACS_CAP		0x04	/* ACS Capability Register */
@@ -1004,6 +1038,24 @@
 #define PCI_IOV_MSAO		0x3c	/* VF Migration State Array Offset */
 #define PCI_IOV_MSA_BIR(x)	((x) & 7) /* VF Migration State BIR */
 #define PCI_IOV_MSA_OFFSET(x)	((x) & 0xfffffff8) /* VF Migration State Offset */
+
+/* Transaction Processing Hints */
+#define PCI_TPH_CAPABILITIES	4
+#define   PCI_TPH_INTVEC_SUP	(1<<1)	/* Supports interrupt vector mode */
+#define   PCI_TPH_DEV_SUP      	(1<<2)	/* Device specific mode supported */
+#define   PCI_TPH_EXT_REQ_SUP	(1<<8)	/* Supports extended requests */
+#define   PCI_TPH_ST_LOC_MASK	(3<<9)	/* Steering table location bits */
+#define     PCI_TPH_ST_NONE	(0<<9)	/* No steering table */
+#define     PCI_TPH_ST_CAP	(1<<9)	/* Steering table in TPH cap */
+#define     PCI_TPH_ST_MSIX	(2<<9)	/* Steering table in MSI-X table */
+#define   PCI_TPH_ST_SIZE_SHIFT	(16)	/* Encoded as size - 1 */
+
+/* Latency Tolerance Reporting */
+#define PCI_LTR_MAX_SNOOP	4	/* 16 bit value */
+#define   PCI_LTR_VALUE_MASK	(0x3ff)
+#define   PCI_LTR_SCALE_SHIFT	(10)
+#define   PCI_LTR_SCALE_MASK	(7)
+#define PCI_LTR_MAX_NOSNOOP	6	/* 16 bit value */
 
 /*
  * The PCI interface treats multi-function devices as independent

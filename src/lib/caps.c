@@ -71,7 +71,7 @@ pci_scan_ext_caps(struct pci_dev *d)
       if (been_there[where]++)
 	break;
       pci_add_cap(d, where, id, PCI_CAP_EXTENDED);
-      where = header >> 20;
+      where = (header >> 20) & ~3;
     }
   while (where);
 }
@@ -96,8 +96,8 @@ pci_free_caps(struct pci_dev *d)
 
   while (cap = d->first_cap)
     {
-      d->first_cap = cap;
-      pci_mfree(d);
+      d->first_cap = cap->next;
+      pci_mfree(cap);
     }
 }
 

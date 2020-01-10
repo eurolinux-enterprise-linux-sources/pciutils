@@ -125,7 +125,7 @@ sysfs_get_resources(struct pci_dev *d)
 	break;
       if (sscanf(buf, "%llx %llx %llx", &start, &end, &flags) != 3)
 	a->error("Syntax error in %s", namebuf);
-      if (start)
+      if (end > start)
 	size = end - start + 1;
       else
 	size = 0;
@@ -238,7 +238,6 @@ sysfs_fill_slots(struct pci_access *a)
 	      {
 		d->phy_slot = pci_malloc(a, strlen(entry->d_name) + 1);
 		strcpy(d->phy_slot, entry->d_name);
-		break;
 	      }
 	}
       fclose(file);

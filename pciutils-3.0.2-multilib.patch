@@ -1,6 +1,15 @@
-diff -up pciutils-3.1.4/lib/configure.multilib pciutils-3.1.4/lib/configure
---- pciutils-3.1.4/lib/configure.multilib	2009-08-10 16:28:53.000000000 +0200
-+++ pciutils-3.1.4/lib/configure	2009-10-23 17:51:57.272127815 +0200
+diff -up pciutils-3.1.10/lib/configure.multilib pciutils-3.1.10/lib/configure
+--- pciutils-3.1.10/lib/configure.multilib	2011-01-07 22:04:28.000000000 +0100
++++ pciutils-3.1.10/lib/configure	2012-09-25 16:07:50.926823161 +0200
+@@ -30,7 +30,7 @@ if [ -z "$HOST" ] ; then
+ 		proc=`/usr/sbin/lsdev -C -c processor -S available -F name | head -1`
+ 		cpu=`/usr/sbin/lsattr -F value -l $proc -a type | sed 's/_.*//'`
+ 	else
+-		cpu=`uname -m | sed 's/^i.86$/i386/;s/^sun4u$/sparc64/;s/^i86pc$/i386/;s/^BePC$/i386/;s/^BeMac$/powerpc/;s/^BeBox$/powerpc/'`
++		cpu=`uname -m | sed 's/^i.86$/i386/;s/^sun4u$/sparc64/;s/^i86pc$/i386/;s/^BePC$/i386/;s/^BeMac$/powerpc/;s/^BeBox$/powerpc/;s/^ia64$/x86_64/'`
+ 	fi
+ 	if [ "$sys" = "GNU/kFreeBSD" -o "$sys" = "DragonFly" ]
+ 	then
 @@ -50,29 +50,64 @@ sys=`echo $host | sed 's/^\([^-]*\)-\([^
  echo " $host $rel $cpu $sys"
  
@@ -76,7 +85,7 @@ diff -up pciutils-3.1.4/lib/configure.multilib pciutils-3.1.4/lib/configure
  		;;
  	sunos)
  		case $cpu in
-@@ -153,6 +188,7 @@ else
+@@ -161,6 +196,7 @@ else
  	echo >>$c '#define PCI_IDS "pci.ids"'
  fi
  echo >>$c "#define PCI_PATH_IDS_DIR \"$IDSDIR\""
@@ -84,7 +93,7 @@ diff -up pciutils-3.1.4/lib/configure.multilib pciutils-3.1.4/lib/configure
  
  echo_n "Checking for DNS support... "
  if [ "$DNS" = yes -o "$DNS" = no ] ; then
-@@ -167,6 +203,7 @@ else
+@@ -175,6 +211,7 @@ else
  fi
  if [ "$DNS" = yes ] ; then
  	echo >>$c "#define PCI_USE_DNS"
@@ -92,11 +101,10 @@ diff -up pciutils-3.1.4/lib/configure.multilib pciutils-3.1.4/lib/configure
  	echo >>$c "#define PCI_ID_DOMAIN \"pci.id.ucw.cz\""
  	echo >>$m "WITH_LIBS+=$LIBRESOLV"
  fi
-@@ -189,4 +226,5 @@ fi
+@@ -197,4 +234,5 @@ fi
  echo >>$m 'PCILIBPC=$(LIBNAME).pc'
  
  echo >>$c "#define PCILIB_VERSION \"$VERSION\""
 -sed '/"/{s/^#define \([^ ]*\) "\(.*\)"$/\1=\2/;p;d;};s/^#define \(.*\)/\1=1/' <$c >>$m
 +echo >>$cm "#define PCILIB_VERSION \"$VERSION\""
 +sed '/"/{s/^#define \([^ ]*\) "\(.*\)"$/\1=\2/;p;d;};s/^#define \(.*\)/\1=1/' <$cm >>$m
-\ No newline at end of file

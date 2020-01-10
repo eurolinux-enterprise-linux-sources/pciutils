@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <unistd.h>
 
 #include "lspci.h"
 
@@ -330,18 +329,16 @@ show_terse(struct device *d)
 static void
 show_size(pciaddr_t x)
 {
+  static const char suffix[][2] = { "", "K", "M", "G", "T" };
+  unsigned i;
   if (!x)
     return;
-  printf(" [size=");
-  if (x < 1024)
-    printf("%d", (int) x);
-  else if (x < 1048576)
-    printf("%dK", (int)(x / 1024));
-  else if (x < 0x80000000)
-    printf("%dM", (int)(x / 1048576));
-  else
-    printf(PCIADDR_T_FMT, x);
-  putchar(']');
+  for (i = 0; i < (sizeof(suffix) / sizeof(*suffix) - 1); i++) {
+    if (x < 1024)
+      break;
+    x /= 1024;
+  }
+  printf(" [size=%u%s]", (unsigned)x, suffix[i]);
 }
 
 static void
@@ -375,7 +372,7 @@ show_bases(struct device *d, int cnt)
 	{
 	  pciaddr_t a = pos & PCI_BASE_ADDRESS_IO_MASK;
 	  printf("I/O ports at ");
-	  if (a)
+	  if (a || (cmd & PCI_COMMAND_IO))
 	    printf(PCIADDR_PORT_FMT, a);
 	  else if (flg & PCI_BASE_ADDRESS_IO_MASK)
 	    printf("<ignored>");
@@ -593,7 +590,8 @@ show_htype2(struct device *d)
       int p = 8*i;
       u32 base = get_conf_long(d, PCI_CB_MEMORY_BASE_0 + p);
       u32 limit = get_conf_long(d, PCI_CB_MEMORY_LIMIT_0 + p);
-      if (limit > base || verb)
+      limit = limit + 0xfff;
+      if (base <= limit || verb)
 	printf("\tMemory window %d: %08x-%08x%s%s\n", i, base, limit,
 	       (cmd & PCI_COMMAND_MEMORY) ? "" : " [disabled]",
 	       (brc & (PCI_CB_BRIDGE_CTL_PREFETCH_MEM0 << i)) ? " (prefetchable)" : "");

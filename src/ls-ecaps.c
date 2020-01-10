@@ -1,7 +1,7 @@
 /*
  *	The PCI Utilities -- Show Extended Capabilities
  *
- *	Copyright (c) 1997--2008 Martin Mares <mj@ucw.cz>
+ *	Copyright (c) 1997--2010 Martin Mares <mj@ucw.cz>
  *
  *	Can be freely distributed and used under the terms of the GNU GPL.
  */
@@ -10,6 +10,71 @@
 #include <string.h>
 
 #include "lspci.h"
+
+static void
+cap_tph(struct device *d, int where)
+{
+  u32 tph_cap;
+  printf("Transaction Processing Hints\n");
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + PCI_TPH_CAPABILITIES, 4))
+    return;
+
+  tph_cap = get_conf_long(d, where + PCI_TPH_CAPABILITIES);
+
+  if (tph_cap & PCI_TPH_INTVEC_SUP)
+    printf("\t\tInterrupt vector mode supported\n");
+  if (tph_cap & PCI_TPH_DEV_SUP)
+    printf("\t\tDevice specific mode supported\n");
+  if (tph_cap & PCI_TPH_EXT_REQ_SUP)
+    printf("\t\tExtended requester support\n");
+
+  switch (tph_cap & PCI_TPH_ST_LOC_MASK) {
+  case PCI_TPH_ST_NONE:
+    printf("\t\tNo steering table available\n");
+    break;
+  case PCI_TPH_ST_CAP:
+    printf("\t\tSteering table in TPH capability structure\n");
+    break;
+  case PCI_TPH_ST_MSIX:
+    printf("\t\tSteering table in MSI-X table\n");
+    break;
+  default:
+    printf("\t\tReserved steering table location\n");
+    break;
+  }
+}
+
+static u32
+cap_ltr_scale(u8 scale)
+{
+  return 1 << (scale * 5);
+}
+
+static void
+cap_ltr(struct device *d, int where)
+{
+  u32 scale;
+  u16 snoop, nosnoop;
+  printf("Latency Tolerance Reporting\n");
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + PCI_LTR_MAX_SNOOP, 4))
+    return;
+
+  snoop = get_conf_word(d, where + PCI_LTR_MAX_SNOOP);
+  scale = cap_ltr_scale((snoop >> PCI_LTR_SCALE_SHIFT) & PCI_LTR_SCALE_MASK);
+  printf("\t\tMax snoop latency: %lldns\n",
+	 ((unsigned long long)snoop & PCI_LTR_VALUE_MASK) * scale);
+
+  nosnoop = get_conf_word(d, where + PCI_LTR_MAX_NOSNOOP);
+  scale = cap_ltr_scale((nosnoop >> PCI_LTR_SCALE_SHIFT) & PCI_LTR_SCALE_MASK);
+  printf("\t\tMax no snoop latency: %lldns\n",
+	 ((unsigned long long)nosnoop & PCI_LTR_VALUE_MASK) * scale);
+}
 
 static void
 cap_dsn(struct device *d, int where)
@@ -213,6 +278,176 @@ cap_sriov(struct device *d, int where)
 	PCI_IOV_MSA_BIR(l));
 }
 
+static void
+cap_vc(struct device *d, int where)
+{
+  u32 cr1, cr2;
+  u16 ctrl, status;
+  int evc_cnt;
+  int arb_table_pos;
+  int i, j;
+  static const char ref_clocks[][6] = { "100ns" };
+  static const char arb_selects[8][7] = { "Fixed", "WRR32", "WRR64", "WRR128", "??4", "??5", "??6", "??7" };
+  static const char vc_arb_selects[8][8] = { "Fixed", "WRR32", "WRR64", "WRR128", "TWRR128", "WRR256", "??6", "??7" };
+  char buf[8];
+
+  printf("Virtual Channel\n");
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + 4, 0x1c - 4))
+    return;
+
+  cr1 = get_conf_long(d, where + PCI_VC_PORT_REG1);
+  cr2 = get_conf_long(d, where + PCI_VC_PORT_REG2);
+  ctrl = get_conf_word(d, where + PCI_VC_PORT_CTRL);
+  status = get_conf_word(d, where + PCI_VC_PORT_STATUS);
+
+  evc_cnt = BITS(cr1, 0, 3);
+  printf("\t\tCaps:\tLPEVC=%d RefClk=%s PATEntryBits=%d\n",
+    BITS(cr1, 4, 3),
+    TABLE(ref_clocks, BITS(cr1, 8, 2), buf),
+    1 << BITS(cr1, 10, 2));
+
+  printf("\t\tArb:");
+  for (i=0; i<8; i++)
+    if (arb_selects[i][0] != '?' || cr2 & (1 << i))
+      printf("%c%s%c", (i ? ' ' : '\t'), arb_selects[i], FLAG(cr2, 1 << i));
+  arb_table_pos = BITS(cr2, 24, 8);
+
+  printf("\n\t\tCtrl:\tArbSelect=%s\n", TABLE(arb_selects, BITS(ctrl, 1, 3), buf));
+  printf("\t\tStatus:\tInProgress%c\n", FLAG(status, 1));
+
+  if (arb_table_pos)
+    {
+      arb_table_pos = where + 16*arb_table_pos;
+      printf("\t\tPort Arbitration Table [%x] <?>\n", arb_table_pos);
+    }
+
+  for (i=0; i<=evc_cnt; i++)
+    {
+      int pos = where + PCI_VC_RES_CAP + 12*i;
+      u32 rcap, rctrl;
+      u16 rstatus;
+      int pat_pos;
+
+      printf("\t\tVC%d:\t", i);
+      if (!config_fetch(d, pos, 12))
+	{
+	  printf("<unreadable>\n");
+	  continue;
+	}
+      rcap = get_conf_long(d, pos);
+      rctrl = get_conf_long(d, pos+4);
+      rstatus = get_conf_word(d, pos+10);
+
+      pat_pos = BITS(rcap, 24, 8);
+      printf("Caps:\tPATOffset=%02x MaxTimeSlots=%d RejSnoopTrans%c\n",
+	pat_pos,
+	BITS(rcap, 16, 6) + 1,
+	FLAG(rcap, 1 << 15));
+
+      printf("\t\t\tArb:");
+      for (j=0; j<8; j++)
+	if (vc_arb_selects[j][0] != '?' || rcap & (1 << j))
+	  printf("%c%s%c", (j ? ' ' : '\t'), vc_arb_selects[j], FLAG(rcap, 1 << j));
+
+      printf("\n\t\t\tCtrl:\tEnable%c ID=%d ArbSelect=%s TC/VC=%02x\n",
+	FLAG(rctrl, 1 << 31),
+	BITS(rctrl, 24, 3),
+	TABLE(vc_arb_selects, BITS(rctrl, 17, 3), buf),
+	BITS(rctrl, 0, 8));
+
+      printf("\t\t\tStatus:\tNegoPending%c InProgress%c\n",
+	FLAG(rstatus, 2),
+	FLAG(rstatus, 1));
+
+      if (pat_pos)
+	printf("\t\t\tPort Arbitration Table <?>\n");
+    }
+}
+
+static void
+cap_rclink(struct device *d, int where)
+{
+  u32 esd;
+  int num_links;
+  int i;
+  static const char elt_types[][9] = { "Config", "Egress", "Internal" };
+  char buf[8];
+
+  printf("Root Complex Link\n");
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + 4, PCI_RCLINK_LINK1 - 4))
+    return;
+
+  esd = get_conf_long(d, where + PCI_RCLINK_ESD);
+  num_links = BITS(esd, 8, 8);
+  printf("\t\tDesc:\tPortNumber=%02x ComponentID=%02x EltType=%s\n",
+    BITS(esd, 24, 8),
+    BITS(esd, 16, 8),
+    TABLE(elt_types, BITS(esd, 0, 8), buf));
+
+  for (i=0; i<num_links; i++)
+    {
+      int pos = where + PCI_RCLINK_LINK1 + i*PCI_RCLINK_LINK_SIZE;
+      u32 desc;
+      u32 addr_lo, addr_hi;
+
+      printf("\t\tLink%d:\t", i);
+      if (!config_fetch(d, pos, PCI_RCLINK_LINK_SIZE))
+	{
+	  printf("<unreadable>\n");
+	  return;
+	}
+      desc = get_conf_long(d, pos + PCI_RCLINK_LINK_DESC);
+      addr_lo = get_conf_long(d, pos + PCI_RCLINK_LINK_ADDR);
+      addr_hi = get_conf_long(d, pos + PCI_RCLINK_LINK_ADDR + 4);
+
+      printf("Desc:\tTargetPort=%02x TargetComponent=%02x AssocRCRB%c LinkType=%s LinkValid%c\n",
+	BITS(desc, 24, 8),
+	BITS(desc, 16, 8),
+	FLAG(desc, 4),
+	((desc & 2) ? "Config" : "MemMapped"),
+	FLAG(desc, 1));
+
+      if (desc & 2)
+	{
+	  int n = addr_lo & 7;
+	  if (!n)
+	    n = 8;
+	  printf("\t\t\tAddr:\t%02x:%02x.%d  CfgSpace=%08x%08x\n",
+	    BITS(addr_lo, 20, n),
+	    BITS(addr_lo, 15, 5),
+	    BITS(addr_lo, 12, 3),
+	    addr_hi, addr_lo);
+	}
+      else
+	printf("\t\t\tAddr:\t%08x%08x\n", addr_hi, addr_lo);
+    }
+}
+
+static void
+cap_evendor(struct device *d, int where)
+{
+  u32 hdr;
+
+  printf("Vendor Specific Information: ");
+  if (!config_fetch(d, where + PCI_EVNDR_HEADER, 4))
+    {
+      printf("<unreadable>\n");
+      return;
+    }
+
+  hdr = get_conf_long(d, where + PCI_EVNDR_HEADER);
+  printf("ID=%04x Rev=%d Len=%03x <?>\n",
+    BITS(hdr, 0, 16),
+    BITS(hdr, 16, 4),
+    BITS(hdr, 20, 12));
+}
+
 void
 show_ext_caps(struct device *d)
 {
@@ -222,7 +457,7 @@ show_ext_caps(struct device *d)
   do
     {
       u32 header;
-      int id;
+      int id, version;
 
       if (!config_fetch(d, where, 4))
 	break;
@@ -230,7 +465,11 @@ show_ext_caps(struct device *d)
       if (!header)
 	break;
       id = header & 0xffff;
-      printf("\tCapabilities: [%03x] ", where);
+      version = (header >> 16) & 0xf;
+      printf("\tCapabilities: [%03x", where);
+      if (verbose > 1)
+	printf(" v%d", version);
+      printf("] ");
       if (been_there[where]++)
 	{
 	  printf("<chain looped>\n");
@@ -242,7 +481,8 @@ show_ext_caps(struct device *d)
 	    cap_aer(d, where);
 	    break;
 	  case PCI_EXT_CAP_ID_VC:
-	    printf("Virtual Channel <?>\n");
+	  case PCI_EXT_CAP_ID_VC2:
+	    cap_vc(d, where);
 	    break;
 	  case PCI_EXT_CAP_ID_DSN:
 	    cap_dsn(d, where);
@@ -251,7 +491,7 @@ show_ext_caps(struct device *d)
 	    printf("Power Budgeting <?>\n");
 	    break;
 	  case PCI_EXT_CAP_ID_RCLINK:
-	    printf("Root Complex Link <?>\n");
+	    cap_rclink(d, where);
 	    break;
 	  case PCI_EXT_CAP_ID_RCILINK:
 	    printf("Root Complex Internal Link <?>\n");
@@ -266,7 +506,7 @@ show_ext_caps(struct device *d)
 	    printf("Root Bridge Control Block <?>\n");
 	    break;
 	  case PCI_EXT_CAP_ID_VNDR:
-	    printf("Vendor Specific Information <?>\n");
+	    cap_evendor(d, where);
 	    break;
 	  case PCI_EXT_CAP_ID_ACS:
 	    cap_acs(d, where);
@@ -280,10 +520,16 @@ show_ext_caps(struct device *d)
 	  case PCI_EXT_CAP_ID_SRIOV:
 	    cap_sriov(d, where);
 	    break;
+	  case PCI_EXT_CAP_ID_TPH:
+	    cap_tph(d, where);
+	    break;
+	  case PCI_EXT_CAP_ID_LTR:
+	    cap_ltr(d, where);
+	    break;
 	  default:
 	    printf("#%02x\n", id);
 	    break;
 	}
-      where = header >> 20;
+      where = (header >> 20) & ~3;
     } while (where);
 }
