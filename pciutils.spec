@@ -1,6 +1,6 @@
 Name:		pciutils
 Version:	3.1.10
-Release:	2%{?dist}
+Release:	4%{?dist}
 Source:		ftp://atrey.karlin.mff.cuni.cz/pub/linux/pci/%{name}-%{version}.tar.gz
 
 #don't segfault on systems without PCI bus (#84146)
@@ -22,6 +22,9 @@ Patch9:		pciutils-dir-d.patch
 Patch10:	pciutils-2.2.10-sparc-support.patch
 Patch11:	pciutils-3.0.1-superh-support.patch
 Patch12:	pciutils-3.1.2-arm.patch
+
+#for pciutils < 3.2.1, rhbz#1032827
+Patch13:	pciutils-3.1.10-sysfsfill.patch
 
 License:	GPLv2+
 URL:		http://atrey.karlin.mff.cuni.cz/~mj/pciutils.shtml
@@ -74,8 +77,9 @@ devices connected to the PCI bus.
 %patch10 -p1 -b .sparc
 %patch11 -p1 -b .superh
 %patch12 -p1 -b .arm
+%patch13 -p1 -b .sysfsfill
 
-sed -i -e 's|^SRC=.*|SRC="http://pciids.sourceforge.net/pci.ids"|' update-pciids.sh
+sed -i -e 's|^SRC=.*|SRC="http://pciids.sourceforge.net/v2.2/pci.ids"|' update-pciids.sh
 
 %build
 make SHARED="no" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
@@ -139,6 +143,13 @@ install -p lib/libpci.pc $RPM_BUILD_ROOT%{_libdir}/pkgconfig
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Tue May 06 2014 Michal Hlavinka <mhlavink@redhat.com> - 3.1.10-4
+- close directory after processing pci.ids.d directory (#684000)
+- sysfs: do not warn on incomplete slot addresses (#1032827)
+
+* Mon May 05 2014 Michal Hlavinka <mhlavink@redhat.com> - 3.1.10-3
+- fix PCI IDs update url (#998626)
+
 * Thu Sep 27 2012 Michal Hlavinka <mhlavink@redhat.com> - 3.1.10-2
 - fix changes in arm support patch
 
@@ -154,10 +165,10 @@ rm -rf $RPM_BUILD_ROOT
 * Thu May 27 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-9
 - fix requires for sub-packages
 
-* Wed Feb 04 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-8
+* Thu Feb 04 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-8
 - update-pciids moved
 
-* Wed Feb 04 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-7
+* Thu Feb 04 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-7
 - libpci moved to /lib
 
 * Mon Nov 02 2009 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-6
@@ -385,7 +396,7 @@ print out 64-bit addresses.
 - own /usr/include/pci
 - build library with -fPIC
 
-* Thu Jul  8 2002 Bill Nottingham <notting@redhat.com> 2.1.10-2
+* Mon Jul  8 2002 Bill Nottingham <notting@redhat.com> 2.1.10-2
 - don't build with -fomit-frame-pointer
 
 * Mon Jun 24 2002 Bill Nottingham <notting@redhat.com> 2.1.10-1
