@@ -1,6 +1,6 @@
 Name:		pciutils
 Version:	3.1.4
-Release:	9%{?dist}
+Release:	11%{?dist}
 Source:		ftp://atrey.karlin.mff.cuni.cz/pub/linux/pci/%{name}-%{version}.tar.gz
 
 #truncate too long names (#205948)
@@ -25,6 +25,12 @@ Patch9:		pciutils-dir-d.patch
 Patch10:	pciutils-2.2.10-sparc-support.patch
 Patch11:	pciutils-3.0.1-superh-support.patch
 Patch12:	pciutils-3.1.2-arm.patch
+
+#for pciutils < 3.1.5, rhbz#740630
+Patch13:	pciutils-3.1.6-capfree.patch
+
+#for pciutils <= 3.1.8, rhbz#742223
+Patch14:	pciutils-3.1.4-pcie3cap.patch
 
 License:	GPLv2+
 URL:		http://atrey.karlin.mff.cuni.cz/~mj/pciutils.shtml
@@ -78,6 +84,8 @@ devices connected to the PCI bus.
 %patch10 -p1 -b .sparc
 %patch11 -p1 -b .superh
 %patch12 -p1 -b .arm
+%patch13 -p1 -b .capfree
+%patch14 -p1 -b .pcie3cap
 
 sed -i -e 's|^SRC=.*|SRC="http://pciids.sourceforge.net/pci.ids"|' update-pciids.sh
 
@@ -143,6 +151,12 @@ install -p lib/libpci.pc $RPM_BUILD_ROOT%{_libdir}/pkgconfig
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Fri Oct 14 2011 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-11
+- add support for PCIe 3.0 capabilities (#742223)
+
+* Fri Sep 23 2011 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-10
+- fix freeing of data structures in pci_free_cap (#740630)
+
 * Thu May 27 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.4-9
 - fix requires for sub-packages
 
