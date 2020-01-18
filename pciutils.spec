@@ -1,6 +1,6 @@
 Name:		pciutils
-Version:	3.2.0
-Release:	2%{?dist}
+Version:	3.2.1
+Release:	4%{?dist}
 Source:		ftp://atrey.karlin.mff.cuni.cz/pub/linux/pci/%{name}-%{version}.tar.gz
 Source1:        multilibconfigh
 
@@ -15,6 +15,7 @@ URL:		http://atrey.karlin.mff.cuni.cz/~mj/pciutils.shtml
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 ExclusiveOS:	Linux
 Requires:	hwdata
+Requires:	%{name}-libs = %{version}-%{release}
 BuildRequires:	sed
 Summary: PCI bus related utilities
 Group: Applications/System
@@ -64,26 +65,26 @@ mv lib/libpci.a lib/libpci.a.toinstall
 
 make clean
 
-make SHARED="yes" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" LIBDIR="/%{_lib}" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
+make SHARED="yes" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" LIBDIR="%{_libdir}" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
 
 #fix lib vs. lib64 in libpci.pc (static Makefile is used)
-sed -i "s|^libdir=.*$|libdir=/%{_lib}|" lib/libpci.pc
+sed -i "s|^libdir=.*$|libdir=%{_libdir}|" lib/libpci.pc
 
 
 %install
 rm -rf $RPM_BUILD_ROOT
 
-install -d $RPM_BUILD_ROOT/{sbin,%{_sbindir},%{_lib},%{_mandir}/man8,%{_libdir},%{_libdir}/pkgconfig,%{_includedir}/pci}
+install -d $RPM_BUILD_ROOT/{sbin,%{_sbindir},%{_mandir}/man8,%{_libdir},%{_libdir}/pkgconfig,%{_includedir}/pci}
 
-install -p lspci setpci $RPM_BUILD_ROOT/sbin
+install -p lspci setpci $RPM_BUILD_ROOT/%{_sbindir}
 install -p update-pciids $RPM_BUILD_ROOT/%{_sbindir}
 install -p -m 644 lspci.8 setpci.8 update-pciids.8 $RPM_BUILD_ROOT%{_mandir}/man8
-install -p lib/libpci.so.* $RPM_BUILD_ROOT/%{_lib}/
-ln -s ../../%{_lib}/$(basename $RPM_BUILD_ROOT/%{_lib}/*.so.*.*.*) $RPM_BUILD_ROOT%{_libdir}/libpci.so
+install -p lib/libpci.so.* $RPM_BUILD_ROOT/%{_libdir}/
+ln -s $(basename $RPM_BUILD_ROOT/%{_libdir}/*.so.*.*.*) $RPM_BUILD_ROOT%{_libdir}/libpci.so
 
 mv lib/libpci.a.toinstall lib/libpci.a
 install -p -m 644 lib/libpci.a $RPM_BUILD_ROOT%{_libdir}
-/sbin/ldconfig -N $RPM_BUILD_ROOT/%{_lib}
+/sbin/ldconfig -N $RPM_BUILD_ROOT/%{_libdir}
 install -p lib/pci.h $RPM_BUILD_ROOT%{_includedir}/pci
 install -p lib/header.h $RPM_BUILD_ROOT%{_includedir}/pci
 install -p %{SOURCE1} $RPM_BUILD_ROOT%{_includedir}/pci/config.h
@@ -98,15 +99,15 @@ install -p lib/libpci.pc $RPM_BUILD_ROOT%{_libdir}/pkgconfig
 %files
 %defattr(-,root,root,-)
 %doc README ChangeLog pciutils.lsm COPYING
-/sbin/lspci
-/sbin/setpci
+%{_sbindir}/lspci
+%{_sbindir}/setpci
 %{_sbindir}/update-pciids
 %{_mandir}/man8/*
 
 %files libs
 %doc COPYING
 %defattr(-,root,root,-)
-/%{_lib}/libpci.so.*
+/%{_libdir}/libpci.so.*
 
 %files devel-static
 %defattr(-,root,root,-)
@@ -122,6 +123,21 @@ install -p lib/libpci.pc $RPM_BUILD_ROOT%{_libdir}/pkgconfig
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 3.2.1-4
+- Mass rebuild 2014-01-24
+
+* Wed Jan 08 2014 Michal Hlavinka <mhlavink@redhat.com> - 3.2.1-3
+- fix lib vs libdir macros usage
+
+* Wed Jan 08 2014 Michal Hlavinka <mhlavink@redhat.com> - 3.2.1-2
+- pciutils needs explicit require for pciutils-libs
+
+* Fri Jan 03 2014 Michal Hlavinka <mhlavink@redhat.com> - 3.2.1-1
+- updated to 3.2.1
+
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 3.2.0-3
+- Mass rebuild 2013-12-27
+
 * Fri May 31 2013 Michal Hlavinka <mhlavink@redhat.com> - 3.2.0-2
 - add aarch64 support (#969138)
 
@@ -164,7 +180,7 @@ rm -rf $RPM_BUILD_ROOT
 * Mon Aug 30 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.7-1
 - updated to 3.1.7
 
-* Fri Jul 07 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.6-5
+* Wed Jul 07 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.6-5
 - follow licensing guideline update
 
 * Thu Feb 04 2010 Michal Hlavinka <mhlavink@redhat.com> - 3.1.6-4
@@ -404,7 +420,7 @@ print out 64-bit addresses.
 - own /usr/include/pci
 - build library with -fPIC
 
-* Thu Jul  8 2002 Bill Nottingham <notting@redhat.com> 2.1.10-2
+* Mon Jul  8 2002 Bill Nottingham <notting@redhat.com> 2.1.10-2
 - don't build with -fomit-frame-pointer
 
 * Mon Jun 24 2002 Bill Nottingham <notting@redhat.com> 2.1.10-1
