@@ -137,6 +137,37 @@ cap_aer(struct device *d, int where)
 
 }
 
+static void cap_dpc(struct device *d, int where)
+{
+  u16 l;
+
+  printf("Downstream Port Containment\n");
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + PCI_DPC_CAP, 8))
+    return;
+
+  l = get_conf_word(d, where + PCI_DPC_CAP);
+  printf("\t\tDpcCap:\tINT Msg #%d, RPExt%c PoisonedTLP%c SwTrigger%c RP PIO Log %d, DL_ActiveErr%c\n",
+    PCI_DPC_CAP_INT_MSG(l), FLAG(l, PCI_DPC_CAP_RP_EXT), FLAG(l, PCI_DPC_CAP_TLP_BLOCK),
+    FLAG(l, PCI_DPC_CAP_SW_TRIGGER), PCI_DPC_CAP_RP_LOG(l), FLAG(l, PCI_DPC_CAP_DL_ACT_ERR));
+
+  l = get_conf_word(d, where + PCI_DPC_CTL);
+  printf("\t\tDpcCtl:\tTrigger:%x Cmpl%c INT%c ErrCor%c PoisonedTLP%c SwTrigger%c DL_ActiveErr%c\n",
+    PCI_DPC_CTL_TRIGGER(l), FLAG(l, PCI_DPC_CTL_CMPL), FLAG(l, PCI_DPC_CTL_INT),
+    FLAG(l, PCI_DPC_CTL_ERR_COR), FLAG(l, PCI_DPC_CTL_TLP), FLAG(l, PCI_DPC_CTL_SW_TRIGGER),
+    FLAG(l, PCI_DPC_CTL_DL_ACTIVE));
+
+  l = get_conf_word(d, where + PCI_DPC_STATUS);
+  printf("\t\tDpcSta:\tTrigger%c Reason:%02x INT%c RPBusy%c TriggerExt:%02x RP PIO ErrPtr:%02x\n",
+    FLAG(l, PCI_DPC_STS_TRIGGER), PCI_DPC_STS_REASON(l), FLAG(l, PCI_DPC_STS_INT),
+    FLAG(l, PCI_DPC_STS_RP_BUSY), PCI_DPC_STS_TRIGGER_EXT(l), PCI_DPC_STS_PIO_FEP(l));
+
+  l = get_conf_word(d, where + PCI_DPC_SOURCE);
+  printf("\t\tSource:\t%04x\n", l);
+}
+
 static void
 cap_acs(struct device *d, int where)
 {
@@ -202,6 +233,54 @@ cap_ats(struct device *d, int where)
   w = get_conf_word(d, where + PCI_ATS_CTRL);
   printf("\t\tATSCtl:\tEnable%c, Smallest Translation Unit: %02x\n",
 	FLAG(w, PCI_ATS_CTRL_ENABLE), PCI_ATS_CTRL_STU(w));
+}
+
+static void
+cap_pri(struct device *d, int where)
+{
+  u16 w;
+  u32 l;
+
+  printf("Page Request Interface (PRI)\n");
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + PCI_PRI_CTRL, 0xc))
+    return;
+
+  w = get_conf_word(d, where + PCI_PRI_CTRL);
+  printf("\t\tPRICtl: Enable%c Reset%c\n",
+	FLAG(w, PCI_PRI_CTRL_ENABLE), FLAG(w, PCI_PRI_CTRL_RESET));
+  w = get_conf_word(d, where + PCI_PRI_STATUS);
+  printf("\t\tPRISta: RF%c UPRGI%c Stopped%c\n",
+	FLAG(w, PCI_PRI_STATUS_RF), FLAG(w, PCI_PRI_STATUS_UPRGI),
+	FLAG(w, PCI_PRI_STATUS_STOPPED));
+  l = get_conf_long(d, where + PCI_PRI_MAX_REQ);
+  printf("\t\tPage Request Capacity: %08x, ", l);
+  l = get_conf_long(d, where + PCI_PRI_ALLOC_REQ);
+  printf("Page Request Allocation: %08x\n", l);
+}
+
+static void
+cap_pasid(struct device *d, int where)
+{
+  u16 w;
+
+  printf("Process Address Space ID (PASID)\n");
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + PCI_PASID_CAP, 4))
+    return;
+
+  w = get_conf_word(d, where + PCI_PASID_CAP);
+  printf("\t\tPASIDCap: Exec%c Priv%c, Max PASID Width: %02x\n",
+	FLAG(w, PCI_PASID_CAP_EXEC), FLAG(w, PCI_PASID_CAP_PRIV),
+	PCI_PASID_CAP_WIDTH(w));
+  w = get_conf_word(d, where + PCI_PASID_CTRL);
+  printf("\t\tPASIDCtl: Enable%c Exec%c Priv%c\n",
+	FLAG(w, PCI_PASID_CTRL_ENABLE), FLAG(w, PCI_PASID_CTRL_EXEC),
+	FLAG(w, PCI_PASID_CTRL_PRIV));
 }
 
 static void
@@ -500,6 +579,65 @@ cap_l1pm(struct device *d, int where)
     }
 }
 
+static void
+cap_ptm(struct device *d, int where)
+{
+  u32 buff;
+  u16 clock;
+
+  printf("Precision Time Measurement\n");
+
+  if (verbose < 2)
+    return;
+
+  if (!config_fetch(d, where + 4, 8))
+    {
+      printf("\t\t<unreadable>\n");
+      return;
+    }
+
+  buff = get_conf_long(d, where + 4);
+  printf("\t\tPTMCap: ");
+  printf("Requester:%c Responder:%c Root:%c\n",
+    FLAG(buff, 0x1),
+    FLAG(buff, 0x2),
+    FLAG(buff, 0x4));
+
+  clock = BITS(buff, 8, 8);
+  printf("\t\tPTMClockGranularity: ");
+  switch (clock)
+    {
+      case 0x00:
+        printf("Unimplemented\n");
+        break;
+      case 0xff:
+        printf("Greater than 254ns\n");
+        break;
+      default:
+        printf("%huns\n", clock);
+    }
+
+  buff = get_conf_long(d, where + 8);
+  printf("\t\tPTMControl: ");
+  printf("Enabled:%c RootSelected:%c\n",
+    FLAG(buff, 0x1),
+    FLAG(buff, 0x2));
+
+  clock = BITS(buff, 8, 8);
+  printf("\t\tPTMEffectiveGranularity: ");
+  switch (clock)
+    {
+      case 0x00:
+        printf("Unknown\n");
+        break;
+      case 0xff:
+        printf("Greater than 254ns\n");
+        break;
+      default:
+        printf("%huns\n", clock);
+    }
+}
+
 void
 show_ext_caps(struct device *d)
 {
@@ -531,6 +669,9 @@ show_ext_caps(struct device *d)
 	{
 	  case PCI_EXT_CAP_ID_AER:
 	    cap_aer(d, where);
+	    break;
+	  case PCI_EXT_CAP_ID_DPC:
+	    cap_dpc(d, where);
 	    break;
 	  case PCI_EXT_CAP_ID_VC:
 	  case PCI_EXT_CAP_ID_VC2:
@@ -572,14 +713,23 @@ show_ext_caps(struct device *d)
 	  case PCI_EXT_CAP_ID_SRIOV:
 	    cap_sriov(d, where);
 	    break;
+	  case PCI_EXT_CAP_ID_PRI:
+	    cap_pri(d, where);
+	    break;
 	  case PCI_EXT_CAP_ID_TPH:
 	    cap_tph(d, where);
 	    break;
 	  case PCI_EXT_CAP_ID_LTR:
 	    cap_ltr(d, where);
 	    break;
+	  case PCI_EXT_CAP_ID_PASID:
+	    cap_pasid(d, where);
+	    break;
 	  case PCI_EXT_CAP_ID_L1PM:
 	    cap_l1pm(d, where);
+	    break;
+	  case PCI_EXT_CAP_ID_PTM:
+	    cap_ptm(d, where);
 	    break;
 	  default:
 	    printf("#%02x\n", id);

@@ -1,6 +1,6 @@
 Name:		pciutils
-Version:	3.2.1
-Release:	4%{?dist}
+Version:	3.5.1
+Release:	1%{?dist}
 Source:		ftp://atrey.karlin.mff.cuni.cz/pub/linux/pci/%{name}-%{version}.tar.gz
 Source1:        multilibconfigh
 
@@ -16,7 +16,7 @@ BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 ExclusiveOS:	Linux
 Requires:	hwdata
 Requires:	%{name}-libs = %{version}-%{release}
-BuildRequires:	sed
+BuildRequires:	sed, kmod-devel
 Summary: PCI bus related utilities
 Group: Applications/System
 
@@ -60,12 +60,12 @@ devices connected to the PCI bus.
 sed -i -e 's|^SRC=.*|SRC="http://pciids.sourceforge.net/pci.ids"|' update-pciids.sh
 
 %build
-make SHARED="no" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
+make SHARED="no" LIBKMOD="yes" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
 mv lib/libpci.a lib/libpci.a.toinstall
 
 make clean
 
-make SHARED="yes" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" LIBDIR="%{_libdir}" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
+make SHARED="yes" LIBKMOD="yes" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" LIBDIR="%{_libdir}" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
 
 #fix lib vs. lib64 in libpci.pc (static Makefile is used)
 sed -i "s|^libdir=.*$|libdir=%{_libdir}|" lib/libpci.pc
@@ -123,6 +123,13 @@ install -p lib/libpci.pc $RPM_BUILD_ROOT%{_libdir}/pkgconfig
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Tue Jun 28 2016 Michal Hlavinka <mhlavink@redhat.com> - 3.5.1-1
+- updated to 3.5.1
+- adds support for 32-bit PCI domains (#1337658)
+
+* Tue Jun 28 2016 Michal Hlavinka <mhlavink@redhat.com> - 3.2.1-5
+- build with libkmod support enabled (#1304026)
+
 * Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 3.2.1-4
 - Mass rebuild 2014-01-24
 
