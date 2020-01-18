@@ -1,6 +1,6 @@
 Name:		pciutils
 Version:	3.5.1
-Release:	2%{?dist}
+Release:	3%{?dist}
 Source:		ftp://atrey.karlin.mff.cuni.cz/pub/linux/pci/%{name}-%{version}.tar.gz
 Source1:        multilibconfigh
 
@@ -58,8 +58,6 @@ devices connected to the PCI bus.
 %patch1 -p1 -b .idpath
 %patch2 -p1 -b .dird
 %patch3 -p1 -b .gen4speed
-
-sed -i -e 's|^SRC=.*|SRC="http://pciids.sourceforge.net/pci.ids"|' update-pciids.sh
 
 %build
 make SHARED="no" LIBKMOD="yes" ZLIB="no" STRIP="" OPT="$RPM_OPT_FLAGS" PREFIX="/usr" IDSDIR="/usr/share/hwdata" PCI_IDS="pci.ids" %{?_smp_mflags}
@@ -125,6 +123,9 @@ install -p lib/libpci.pc $RPM_BUILD_ROOT%{_libdir}/pkgconfig
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Fri Oct 27 2017 Michal Hlavinka <mhlavink@redhat.com> - 3.5.1-3
+- fix update-pciids url (#1493772)
+
 * Mon Apr 03 2017 Michal Hlavinka <mhlavink@redhat.com> - 3.5.1-2
 - show speed of gen4 pci cards (#1425167)
 
