@@ -1,6 +1,6 @@
 Name:		pciutils
 Version:	3.5.1
-Release:	1%{?dist}
+Release:	2%{?dist}
 Source:		ftp://atrey.karlin.mff.cuni.cz/pub/linux/pci/%{name}-%{version}.tar.gz
 Source1:        multilibconfigh
 
@@ -9,6 +9,7 @@ Patch1:		pciutils-2.2.1-idpath.patch
 
 #add support for directory with another pci.ids, rejected by upstream, rhbz#195327
 Patch2:		pciutils-dir-d.patch
+Patch3: pciutils-3.5.1-gen4speed.patch
 
 License:	GPLv2+
 URL:		http://atrey.karlin.mff.cuni.cz/~mj/pciutils.shtml
@@ -56,6 +57,7 @@ devices connected to the PCI bus.
 %setup -q -n pciutils-%{version}
 %patch1 -p1 -b .idpath
 %patch2 -p1 -b .dird
+%patch3 -p1 -b .gen4speed
 
 sed -i -e 's|^SRC=.*|SRC="http://pciids.sourceforge.net/pci.ids"|' update-pciids.sh
 
@@ -123,6 +125,9 @@ install -p lib/libpci.pc $RPM_BUILD_ROOT%{_libdir}/pkgconfig
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Mon Apr 03 2017 Michal Hlavinka <mhlavink@redhat.com> - 3.5.1-2
+- show speed of gen4 pci cards (#1425167)
+
 * Tue Jun 28 2016 Michal Hlavinka <mhlavink@redhat.com> - 3.5.1-1
 - updated to 3.5.1
 - adds support for 32-bit PCI domains (#1337658)
